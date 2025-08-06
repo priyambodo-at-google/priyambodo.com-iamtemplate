@@ -6,11 +6,9 @@ export GOOGLE_GENAI_USE_VERTEXAI=TRUE
 export GOOGLE_CLOUD_LOCATION="us-central1"
 
 export GCP_REGION='us-central1'
-export GCP_PROJECT='work-mylab-machinelearning'
 export AR_REPO='priyambodocom-artifactregistry'  
 export SERVICE_NAME='changeme-priyambodo-com'
 
 echo $GCP_REGION
-echo $GCP_PROJECT
 echo $AR_REPO
 echo $SERVICE_NAME
