@@ -1,0 +1,1 @@
+https://developers.googleblog.com/en/simplify-agent-building-adk-gemini-cli/ >> use llms-full.txt and gemini-cli to create adk
