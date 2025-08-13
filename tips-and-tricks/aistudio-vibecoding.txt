@@ -1,0 +1,5 @@
+#Migrating from One Account to Another.
+Do this migration task from one AI Studio account to another:
+1. create a SOURCE-SINGLEFILE-GUIDE.txt file in root folder, which will explain the structure file (the folder and file structure and name) of the file.
+2. create a SOURCE-SINGLEFILE-CODE.txt file in root folder, which copy all the source code in this one file, so it can be referred by the SOURCE-SINGLEFILE-GUIDE.txt if I would like to rebuild this app again using other account, while maintaining the same code and same structure.
+
