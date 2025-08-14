@@ -1,0 +1,160 @@
+Step 1: Workload Identity Federation (Recommended & Most Secure)
+================================================================
+
+This is the modern, recommended, and most secure method. It doesn't require you to store any secret keys in Terraform
+Cloud.
+
+  1. Create a GCP Service Account: This is an identity that Terraform Cloud will use. Give it the "Compute Admin" role so
+    it can create VMs.
+  2. Set up Workload Identity Federation in GCP: This is the core of this method. You are essentially telling your GCP
+    project to trust your Terraform Cloud workspace, allowing it to act as the service account you just created.
+  3. Configure your Terraform Cloud Workspace: You'll set a few environment variables in your workspace that tell the
+    Terraform Google Provider to use Workload Identity Federation for authentication.
+
+The official HashiCorp documentation has a detailed, step-by-step guide for this. It is the best resource to follow:
+
+**Configure Workload Identity Federation for Terraform Cloud** 
+(https://developer.hashicorp.com/terraform/cloud-docs/workspaces/dynamic-provider-credentials/gcp-configuration)
+
+
+1. DELETE IF EXIST
+
+# Delete the Workload Identity Pool Provider
+gcloud iam workload-identity-pools providers delete hashicorpcloud-provider \
+  --workload-identity-pool=pool-wif-hashicorpcloud \
+  --project=work-mylab-machinelearning \
+  --location=global 
+
+# Delete the Workload Identity Pool
+gcloud iam workload-identity-pools delete pool-wif-hashicorpcloud \
+  --project=work-mylab-machinelearning \
+  --location=global 
+
+# Delete the Service Account IAM Policy Binding
+gcloud iam service-accounts remove-iam-policy-binding sa-terraform-hashicorpcloud@work-mylab-machinelearning.iam.gserviceaccount.com \
+  --project=work-mylab-machinelearning \
+  --member="principalSet://iam.googleapis.com/projects/388889235558/locations/global/workloadIdentityPools/pool-wif-hashicorpcloud/*" \
+  --role="roles/iam.workloadIdentityUser" 
+
+# Delete the Service Account
+gcloud iam service-accounts delete sa-terraform-hashicorpcloud@work-mylab-machinelearning.iam.gserviceaccount.com \
+  --project=work-mylab-machinelearning 
+
+2. CREATE EVERYTHING
+
+# Step 1: Create a Workload Identity Pool and Provider
+gcloud iam workload-identity-pools create pool-hashicorpcloud \
+  --project=work-mylab-machinelearning \
+  --location=global \
+  --display-name="Terraform Hashicorp Cloud Pool"
+
+gcloud iam workload-identity-pools providers create-oidc hashicorpcloud-provider \
+  --project=work-mylab-machinelearning \
+  --location=global \
+  --workload-identity-pool=pool-hashicorpcloud \
+  --issuer-uri=https://app.terraform.io \
+  --attribute-mapping="google.subject=assertion.sub" \
+  --attribute-condition="assertion.sub.startsWith('organization:bicarait:')"
+
+# Step 2: Create a Google Cloud Service Account
+gcloud iam service-accounts create sa-terraform-hashicorpcloud \
+  --project=work-mylab-machinelearning \
+  --display-name="Terraform Hashicorp Cloud Service Account"
+
+gcloud projects add-iam-policy-binding work-mylab-machinelearning \
+  --member="serviceAccount:sa-terraform-hashicorpcloud@work-mylab-machinelearning.iam.gserviceaccount.com" \
+  --role="roles/editor"
+
+# Step 3: Grant the Workload Identity Pool Permission to Impersonate the Service Account
+gcloud iam service-accounts add-iam-policy-binding sa-terraform-hashicorpcloud@work-mylab-machinelearning.iam.gserviceaccount.com \
+    --member="principalSet://iam.googleapis.com/projects/388889235558/locations/global/workloadIdentityPools/pool-hashicorpcloud/*" \
+    --role="roles/iam.workloadIdentityUser"
+
+# Step 4: Your Terraform Configuration
+# Add these environment variables to your Terraform Cloud workspace:
+# TFC_GCP_PROJECT_NUMBER = 388889235558
+# TFC_GCP_PROVIDER_AUTH = true
+# TFC_GCP_RUN_SERVICE_ACCOUNT_EMAIL = sa-terraform-hashicorpcloud@work-mylab-machinelearning.iam.gserviceaccount.com
+# TFC_GCP_WORKLOAD_POOL_ID = pool-hashicorpcloud
+# TFC_GCP_WORKLOAD_PROVIDER_ID = hashicorpcloud-provider
+
+# Your Terraform provider block:
+/*
+provider "google" {
+  project = "work-mylab-machinelearning"
+  region  = "us-central1"
+}
+*/
+
+terraform init
+terraform plan
+terraform apply
+
+Step 2: Run the Command
+=======================
+
+The Core Workflow Commands
+
+These are the commands you'll use in your day-to-day work.
+
+  1. `terraform init`
+      * What it does: This is the very first command you run in a new Terraform project. It initializes the working
+        directory by:
+          * Downloading the necessary provider plugins (like google, aws, etc.) specified in your versions.tf or main.tf.
+          * Setting up the backend for storing your state file (which keeps track of the resources Terraform manages).
+      * When to use it: You need to run this once per project, and again if you ever add a new provider or change the
+        backend configuration.
+
+  2. `terraform plan`
+      * What it does: Creates an execution plan. Terraform reads your configuration files and compares them to the current
+        state of your resources in the real world (e.g., in your GCP project). It then shows you what it will do if you
+        apply the changes. It will tell you which resources will be created, updated, or destroyed.
+      * When to use it: Always run this before apply. It's a crucial safety check to ensure you're not about to make a
+        change you didn't intend.
+
+  3. `terraform apply`
+      * What it does: Applies the changes described in the execution plan. It will actually create, update, or delete
+        resources to make your infrastructure match your configuration. By default, it will show you the plan again and
+        ask for confirmation before proceeding.
+      * When to use it: When you are ready to make the changes described in your plan.
+
+  4. `terraform destroy`
+      * What it does: This command is the opposite of apply. It will destroy all the resources that are managed by the
+        current Terraform project. It will also show you a plan of what will be destroyed and ask for confirmation.
+      * When to use it: When you want to tear down the infrastructure you've created and no longer need it. Be very
+        careful with this command in production environments!
+
+State Management Commands
+
+These commands are for inspecting and manipulating the Terraform state file. They are more advanced, but very useful.
+
+  5. `terraform show`
+      * What it does: Shows the current state of your managed infrastructure, based on the state file. It will list all
+        the resources Terraform knows about and their current attribute values.
+      * When to use it: When you want to see a detailed view of what Terraform is currently managing.
+
+  6. `terraform state list`
+      * What it does: A simpler version of show. It just lists the resources in the state file, without all the details.
+      * When to use it: When you just want a quick list of the resources being managed.
+
+  7. `terraform import`
+      * What it does: This allows you to bring existing resources (that were created outside of Terraform) under
+        Terraform's management. You need to provide the ID of the existing resource and the address of the Terraform
+        resource you want to import it into.
+      * When to use it: When you have manually created resources and you want to start managing them with Terraform
+        without having to destroy and recreate them.
+
+Formatting and Validation
+
+  8. `terraform fmt`
+      * What it does: This command automatically formats your Terraform configuration files to a standard, canonical
+        format. It helps keep your code clean and consistent.
+      * When to use it: It's a good practice to run this before committing your code to version control.
+
+  9. `terraform validate`
+      * What it does: Checks your configuration files for syntax errors and other issues. It doesn't connect to your cloud
+        provider or check the state. It's a quick, offline check.
+      * When to use it: As a quick sanity check to make sure your code is syntactically correct.
+
+By understanding these commands, you'll be well-equipped to handle most Terraform workflows. The core cycle of init ->
+plan -> apply is what you'll use most often, but the others are very powerful when you need them.
